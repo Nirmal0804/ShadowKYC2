@@ -1,0 +1,16 @@
+2026-02-18 12:26:48.911613: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-02-18 12:26:54.410792: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+Traceback (most recent call last):
+  File "E:\impactaithon1\diagnose_pipeline.py", line 19, in <module>
+    orchestrator = SessionOrchestrator()
+  File "E:\impactaithon1\app\core\orchestrator.py", line 27, in __init__
+    self.face_detector = FaceDetector()
+                         ~~~~~~~~~~~~^^
+  File "E:\impactaithon1\app\modules\face_detector.py", line 11, in __init__
+    self.mp_face_detection = mp.solutions.face_detection
+                             ^^^^^^^^^^^^
+AttributeError: module 'mediapipe' has no attribute 'solutions'
+--- DIAGNOSING SHADOW PIPELINE ---
+SUCCESS: SessionOrchestrator imported.
+Initializing Orchestrator...
+FAILED: Orchestrator initialization failed: module 'mediapipe' has no attribute 'solutions'

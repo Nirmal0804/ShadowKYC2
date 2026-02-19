@@ -1,0 +1,206 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Global Background: Tasker Light Cream/Beige */
+  --bg-color: #F5F5F0;
+  --bg-gradient: linear-gradient(135deg, #FDFBF7 0%, #F2F2EB 100%);
+
+  /* The Glass Card: White Frost / Soft Neomorphism */
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-border: 1px solid rgba(0, 0, 0, 0.05);
+  /* Very subtle border */
+  --glass-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
+  /* Soft shadow */
+  --backdrop-blur: blur(20px);
+
+  /* Inputs: Solid White Pills */
+  --input-bg: #FFFFFF;
+  --input-border: 1px solid rgba(0, 0, 0, 0.05);
+  --input-text: #1A1A1A;
+  --input-placeholder: #9CA3AF;
+
+  /* Typography */
+  --text-main: #1A1A1A;
+  /* Dark almost black */
+  --text-secondary: #5F5449;
+  /* Earthy dark gray */
+  --text-muted: #9CA3AF;
+
+  /* Accents */
+  --accent: #FFC107;
+  /* Tasker Yellow */
+  --accent-hover: #F59E0B;
+  --accent-gradient: linear-gradient(135deg, #FFC107 0%, #F59E0B 100%);
+
+  /* Status Colors */
+  --status-green: #10B981;
+  --status-red: #EF4444;
+
+  /* Button Text */
+  --button-text: #1A1A1A;
+
+  /* Navbar */
+  --nav-bg: rgba(255, 255, 255, 0.8);
+  --nav-border: rgba(0, 0, 0, 0.05);
+  --nav-link: #64748B;
+  --nav-link-active: #1A1A1A;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg-color: #0F1117;
+  --bg-gradient: linear-gradient(135deg, #0F1117 0%, #1A1D2B 100%);
+
+  --glass-bg: rgba(30, 34, 50, 0.92);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.4);
+
+  --input-bg: rgba(30, 34, 50, 0.9);
+  --input-border: 1px solid rgba(255, 255, 255, 0.1);
+  --input-text: #E2E8F0;
+  --input-placeholder: #64748B;
+
+  --text-main: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+
+  --accent: #FFC107;
+  --accent-hover: #F59E0B;
+
+  --button-text: #1A1A1A;
+
+  --nav-bg: rgba(15, 17, 23, 0.9);
+  --nav-border: rgba(255, 255, 255, 0.06);
+  --nav-link: #94A3B8;
+  --nav-link-active: #F1F5F9;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg-color);
+  background-image: var(--bg-gradient);
+  color: var(--text-main);
+  min-height: 100vh;
+}
+
+/* Utilities */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: 2rem;
+  /* Large smooth corners */
+}
+
+.glass-input {
+  background: var(--input-bg);
+  border: var(--input-border);
+  color: var(--input-text);
+  border-radius: 3rem;
+  /* Pill shape like Tasker */
+  padding: 0.9rem 1.5rem;
+  outline: none;
+  transition: all 0.2s ease;
+  width: 100%;
+  font-family: inherit;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.glass-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.15);
+}
+
+.btn-primary {
+  background: var(--accent-gradient);
+  color: var(--button-text);
+  /* Dark text on yellow */
+  border: none;
+  border-radius: 3rem;
+  /* Pill shape */
+  padding: 0.9rem 2rem;
+  font-weight: 700;
+  /* Bolder text */
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.25);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(255, 193, 7, 0.35);
+}
+
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-secondary {
+  background: var(--input-bg);
+  color: var(--text-main);
+  border: var(--glass-border);
+  border-radius: 3rem;
+  padding: 0.9rem 2rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Spotlight Effect */
+.spotlight {
+  position: absolute;
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, rgba(255, 193, 7, 0.15) 0%, rgba(255, 255, 255, 0) 70%);
+  top: -25vw;
+  right: -10vw;
+  border-radius: 50%;
+  filter: blur(60px);
+  z-index: 0;
+  pointer-events: none;
+  animation: float 10s ease-in-out infinite;
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(-20px, 20px);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
+}

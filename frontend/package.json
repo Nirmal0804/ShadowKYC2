@@ -1,0 +1,27 @@
+{
+    "name": "shadow-frontend",
+    "private": true,
+    "version": "0.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "chart.js": "^4.5.1",
+        "clsx": "^2.1.1",
+        "lucide-react": "^0.400.0",
+        "react": "^18.3.1",
+        "react-chartjs-2": "^5.3.1",
+        "react-dom": "^18.3.1",
+        "react-router-dom": "^7.13.0",
+        "tailwind-merge": "^2.3.0"
+    },
+    "devDependencies": {
+        "@types/react": "^18.3.3",
+        "@types/react-dom": "^18.3.0",
+        "@vitejs/plugin-react": "^4.3.1",
+        "vite": "^5.3.4"
+    }
+}
