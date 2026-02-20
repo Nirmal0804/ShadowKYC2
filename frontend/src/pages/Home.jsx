@@ -17,6 +17,7 @@ const Home = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [dragOver, setDragOver] = useState(false);
     const [showProfile, setShowProfile] = useState(false);
+    const [showNotifications, setShowNotifications] = useState(false);
     const fileInputRef = useRef(null);
 
     // Dashboard features
@@ -216,8 +217,12 @@ const Home = () => {
                 role={role}
                 onLogout={logout}
                 onProfileClick={() => setShowProfile(true)}
+                onNotificationClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) markNotificationsRead(); }}
+                notificationCount={unreadCount}
+                showNotifications={showNotifications}
+                notifications={notifications}
                 links={[
-                    { label: 'Home', path: '#', active: true },
+                    { label: 'Home', path: '#', active: activeTab === 'home', onClick: () => setActiveTab('home') },
                     { label: 'Solutions', path: '#' },
                     { label: 'About Us', path: '#' },
                     { label: 'Contact', path: '#' },
@@ -246,12 +251,14 @@ const Home = () => {
                 {role === 'tenant' ? (
                     /* Tenant View */
                     <>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '2rem' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', justifyContent: 'center' }}>
                             {/* Create Session */}
                             <div className="glass-card" style={{
                                 padding: '2rem',
                                 cursor: 'pointer',
                                 transition: 'all 0.3s',
+                                flex: '1 1 300px',
+                                maxWidth: '100%'
                             }}
                                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.borderColor = '#5F5449'; }}
                                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; }}
@@ -288,7 +295,8 @@ const Home = () => {
                                 cursor: 'pointer',
                                 transition: 'all 0.3s',
                                 background: 'var(--glass-bg)',
-                                gridColumn: uploadResult ? '1 / -1' : undefined,
+                                flex: '1 1 300px',
+                                maxWidth: '100%'
                             }}
                                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
                                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'transparent'; }}
@@ -584,7 +592,11 @@ const Home = () => {
                             </div>
 
                             {/* Pending Verifications */}
-                            <div className="glass-card" style={{ padding: '2rem', cursor: 'pointer', transition: 'all 0.3s' }}
+                            <div className="glass-card" style={{
+                                padding: '2rem', cursor: 'pointer', transition: 'all 0.3s',
+                                flex: '1 1 300px',
+                                maxWidth: '100%'
+                            }}
                                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
                                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'transparent'; }}
                                 onClick={() => setActiveTab('pending')}
@@ -599,7 +611,11 @@ const Home = () => {
                             </div>
 
                             {/* Document Review Panel */}
-                            <div className="glass-card" style={{ padding: '2rem', cursor: 'pointer', transition: 'all 0.3s' }}
+                            <div className="glass-card" style={{
+                                padding: '2rem', cursor: 'pointer', transition: 'all 0.3s',
+                                flex: '1 1 300px',
+                                maxWidth: '100%'
+                            }}
                                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
                                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'transparent'; }}
                                 onClick={() => setActiveTab('docs')}
@@ -614,7 +630,11 @@ const Home = () => {
                             </div>
 
                             {/* Verification History */}
-                            <div className="glass-card" style={{ padding: '2rem', cursor: 'pointer', transition: 'all 0.3s' }}
+                            <div className="glass-card" style={{
+                                padding: '2rem', cursor: 'pointer', transition: 'all 0.3s',
+                                flex: '1 1 300px',
+                                maxWidth: '100%'
+                            }}
                                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
                                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'transparent'; }}
                                 onClick={() => setActiveTab('history')}
@@ -629,7 +649,11 @@ const Home = () => {
                             </div>
 
                             {/* Reports */}
-                            <div className="glass-card" style={{ padding: '2rem', cursor: 'pointer', transition: 'all 0.3s' }}
+                            <div className="glass-card" style={{
+                                padding: '2rem', cursor: 'pointer', transition: 'all 0.3s',
+                                flex: '1 1 300px',
+                                maxWidth: '100%'
+                            }}
                                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
                                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'transparent'; }}
                                 onClick={() => setActiveTab('reports')}
@@ -644,7 +668,11 @@ const Home = () => {
                             </div>
 
                             {/* User Queries */}
-                            <div className="glass-card" style={{ padding: '2rem', cursor: 'pointer', transition: 'all 0.3s' }}
+                            <div className="glass-card" style={{
+                                padding: '2rem', cursor: 'pointer', transition: 'all 0.3s',
+                                flex: '1 1 300px',
+                                maxWidth: '100%'
+                            }}
                                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
                                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'transparent'; }}
                                 onClick={() => setActiveTab('queries')}
@@ -835,28 +863,43 @@ const Home = () => {
                                 )}
                             </div>
                         )}
+
+                        {/* Tenant: Notifications Panel Removed (Moved to Navbar Dropdown) */}
                     </>
                 ) : (
                     /* ─── User Dashboard ─── */
-                    <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '2rem', maxWidth: '1100px' }}>
-                        {/* Sidebar Navigation */}
-                        <div className="glass-card" style={{ padding: '1rem', height: 'fit-content', position: 'sticky', top: '120px' }}>
+                    <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+                        {/* Navigation Tabs - Horizontal Wrap */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'center', marginBottom: '2rem' }}>
                             {[
-                                { id: 'home', icon: <Monitor size={18} />, label: 'Join Session' },
-                                { id: 'documents', icon: <FileText size={18} />, label: 'Upload Documents' },
-                                { id: 'status', icon: <Eye size={18} />, label: 'Application Status' },
-                                { id: 'support', icon: <HelpCircle size={18} />, label: 'Raise Query' },
-                                { id: 'history', icon: <History size={18} />, label: 'Session History' },
-                                { id: 'notifications', icon: <Bell size={18} />, label: `Notifications${unreadCount ? ` (${unreadCount})` : ''}` },
+                                { id: 'home', icon: Monitor, label: 'Join Session' },
+                                { id: 'documents', icon: FileText, label: 'Upload Documents' },
+                                { id: 'status', icon: Eye, label: 'Application Status' },
+                                { id: 'support', icon: HelpCircle, label: 'Raise Query' },
+                                { id: 'history', icon: History, label: 'Session History' },
                             ].map(tab => (
                                 <div key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id === 'notifications') markNotificationsRead(); }}
+                                    className="glass-card"
                                     style={{
-                                        display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: '0.75rem',
-                                        cursor: 'pointer', transition: 'all 0.2s', marginBottom: '0.25rem',
-                                        background: activeTab === tab.id ? 'rgba(255,193,7,0.12)' : 'transparent',
-                                        color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: activeTab === tab.id ? 700 : 500, fontSize: '0.88rem',
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem',
+                                        padding: '1.25rem', borderRadius: '1.5rem',
+                                        cursor: 'pointer', transition: 'all 0.2s',
+                                        background: activeTab === tab.id ? 'rgba(255,193,7,0.12)' : 'var(--glass-bg)',
+                                        border: activeTab === tab.id ? '1px solid var(--accent)' : 'var(--glass-border)',
+                                        flex: '1 1 160px',
+                                        textAlign: 'center',
+                                        minWidth: '140px'
+                                    }}
+                                >
+                                    <tab.icon size={26} color={activeTab === tab.id ? '#FFC107' : 'var(--text-secondary)'} />
+                                    <div style={{
+                                        fontWeight: activeTab === tab.id ? 800 : 600,
+                                        color: activeTab === tab.id ? 'var(--text-main)' : 'var(--text-secondary)',
+                                        fontSize: '0.9rem',
+                                        lineHeight: 1.2
                                     }}>
-                                    {tab.icon} {tab.label}
+                                        {tab.label}
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -1010,29 +1053,7 @@ const Home = () => {
                                 </div>
                             )}
 
-                            {/* Notifications Tab */}
-                            {activeTab === 'notifications' && (
-                                <div className="glass-card" style={{ padding: '2.5rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                                        <Bell size={24} color="#FFC107" />
-                                        <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-main)' }}>Notifications</h3>
-                                    </div>
-                                    {notifications.length === 0 ? (
-                                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                                            <Bell size={40} style={{ marginBottom: '1rem', opacity: 0.4 }} />
-                                            <p style={{ fontWeight: 600 }}>No notifications</p>
-                                        </div>
-                                    ) : notifications.map((n, i) => (
-                                        <div key={i} style={{ padding: '0.85rem 1rem', borderRadius: '0.75rem', background: n.read ? 'transparent' : 'rgba(255,193,7,0.05)', border: '1px solid var(--nav-border)', marginBottom: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: n.read ? 'var(--text-muted)' : '#FFC107', marginTop: '0.4rem', flexShrink: 0 }} />
-                                            <div>
-                                                <p style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)' }}>{n.message}</p>
-                                                <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{formatTime(n.created_at)}</p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            {/* Notifications Tab Removed (Moved to Navbar Dropdown) */}
                         </div>
                     </div>
                 )}

@@ -21,6 +21,7 @@ const UserCamera = () => {
     const [frameCount, setFrameCount] = useState(0);
     const [videoDevices, setVideoDevices] = useState([]);
     const [selectedCamera, setSelectedCamera] = useState('');
+    const [completionDecision, setCompletionDecision] = useState(null);
 
     const user = JSON.parse(localStorage.getItem('shadow_user') || '{}');
 
@@ -95,6 +96,9 @@ const UserCamera = () => {
         socket.onopen = () => {
             console.log('WS Connected as client:', sessionId);
             setWsConnected(true);
+            if (user?.id) {
+                socket.send(JSON.stringify({ type: 'identify', user_id: user.id }));
+            }
         };
 
         socket.onmessage = (event) => {
@@ -109,6 +113,7 @@ const UserCamera = () => {
                 setTenantConnected(false);
             } else if (msg.type === 'completion') {
                 setStatus('COMPLETED');
+                if (msg.decision) setCompletionDecision(msg.decision);
                 stopStream();
             }
         };
@@ -527,14 +532,25 @@ const UserCamera = () => {
                                     backdropFilter: 'blur(10px)'
                                 }}>
                                     <div style={{
-                                        background: '#10b981', borderRadius: '50%', padding: '1.5rem',
+                                        background: completionDecision === 'rejected' ? '#ef4444' : '#10b981',
+                                        borderRadius: '50%', padding: '1.5rem',
                                         boxShadow: '0 10px 25px rgba(0,0,0,0.1)'
                                     }}>
-                                        <CheckCircle size={64} color="white" />
+                                        {completionDecision === 'rejected' ? <AlertCircle size={64} color="white" /> : <CheckCircle size={64} color="white" />}
                                     </div>
                                     <div style={{ textAlign: 'center' }}>
-                                        <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#1A1A1A', marginBottom: '0.5rem' }}>Verified!</h2>
-                                        <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', fontWeight: 600, opacity: 0.9 }}>Your KYC session has been completed successfully.</p>
+                                        <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#1A1A1A', marginBottom: '0.5rem' }}>
+                                            {completionDecision === 'approved' ? 'Verified!' :
+                                                completionDecision === 'rejected' ? 'Session Rejected' :
+                                                    completionDecision === 'manual_review' ? 'Under Review' :
+                                                        'Session Completed'}
+                                        </h2>
+                                        <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', fontWeight: 600, opacity: 0.9 }}>
+                                            {completionDecision === 'approved' ? 'Your KYC session has been approved successfully.' :
+                                                completionDecision === 'rejected' ? 'Your session did not meet verification criteria.' :
+                                                    completionDecision === 'manual_review' ? 'Your session has been flagged for manual review.' :
+                                                        'Your KYC session has been processed.'}
+                                        </p>
                                     </div>
                                     <button onClick={() => navigate('/home')} style={{
                                         padding: '1rem 2rem',

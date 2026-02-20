@@ -11,6 +11,8 @@ class SessionInstance:
         self.orchestrator.session_id = session_id # Override with specific ID
         self.client_socket: Optional[WebSocket] = None
         self.tenant_socket: Optional[WebSocket] = None
+        self.user_id: Optional[str] = None
+        self.tenant_id: Optional[str] = None
         self.is_active = True
 
     async def connect_client(self, websocket: WebSocket):

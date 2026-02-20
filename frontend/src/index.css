@@ -204,3 +204,26 @@ body {
 .animate-fade-in {
   animation: fade-in 0.6s ease-out forwards;
 }
+
+.horizontal-scroll {
+  display: flex;
+  overflow-x: auto;
+  gap: 2rem;
+  padding-bottom: 1rem;
+  /* Space for scrollbar */
+  scrollbar-width: thin;
+  /* Firefox */
+}
+
+.horizontal-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.horizontal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.horizontal-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}

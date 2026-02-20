@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Lock, Smartphone, Fingerprint, User, BarChart, CheckCircle, ArrowRight, Sun, Moon } from 'lucide-react';
 import Navbar from '../components/Navbar';
+
 import { useTheme } from '../ThemeContext';
 
 const LandingPage = () => {
@@ -11,6 +12,7 @@ const LandingPage = () => {
     return (
         <div style={{
             minHeight: '100vh',
+            display: 'flex', flexDirection: 'column',
             background: 'var(--bg-color)',
             position: 'relative',
             fontFamily: "'Plus Jakarta Sans', sans-serif",
@@ -195,6 +197,10 @@ const LandingPage = () => {
                 </div>
             </main>
 
+
+
+
+
             <style>{`
                 @keyframes float {
                     0%, 100% { transform: translateY(0); }
@@ -207,7 +213,7 @@ const LandingPage = () => {
                 }
                 .nav-item:hover { color: #FFC107 !important; }
             `}</style>
-        </div>
+        </div >
     );
 };
 

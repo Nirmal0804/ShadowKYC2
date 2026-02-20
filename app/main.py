@@ -17,6 +17,7 @@ from pathlib import Path
 from dataclasses import asdict
 
 from app.core.orchestrator import SessionOrchestrator
+from app.core.session_manager import SessionManager
 
 # ─── In-Memory User Store (replace with DB later) ────────────────────────────
 _users: dict = {}  # email -> {name, hashed_pw, role, org, id}
@@ -47,6 +48,53 @@ def _add_notification(user_id: str, message: str, ntype: str = "info"):
         "read": False,
         "created_at": time.time(),
     })
+
+def _process_session_decision(session_id: str, decision: str, notes: str, user_id: str = None, tenant_id: str = None, risk_score: float = None):
+    # Update session history
+    for entry in _session_history:
+        if entry["session_id"] == session_id:
+            entry["decision"] = decision
+            entry["notes"] = notes
+            if risk_score is not None:
+                entry["risk_score"] = risk_score
+            if tenant_id:
+                entry["tenant_id"] = tenant_id
+            break
+    else:
+        # Create history entry if doesn't exist
+        _session_history.append({
+            "session_id": session_id,
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "timestamp": time.time(),
+            "status": "completed",
+            "decision": decision,
+            "notes": notes,
+            "risk_score": risk_score,
+        })
+
+    # Update application status
+    if user_id:
+        if user_id not in _app_status:
+            _app_status[user_id] = []
+        _app_status[user_id].append({
+            "session_id": session_id,
+            "status": decision,
+            "notes": notes,
+            "updated_at": time.time(),
+        })
+
+        # Notify user (if not already notified manually via WS flow, but good to have)
+        labels = {
+            "approved": "Your KYC verification has been approved! ✅",
+            "rejected": "Your KYC verification was not successful. ❌",
+            "manual_review": "Your KYC is under manual review. 🔍",
+            "visit_branch": "Please visit the nearest branch for verification. 🏦",
+        }
+        _add_notification(user_id, labels.get(decision, "Your KYC status has been updated."), decision if decision in ["approved", "success"] else "info")
+
+    return {"message": "Decision processed", "decision": decision}
+
 
 class SignupRequest(BaseModel):
     name: str
@@ -162,48 +210,14 @@ async def get_session_history(role_id: str, role: str = Query(default="user")):
 @app.post("/session/decision")
 async def submit_decision(req: DecisionRequest):
     """Tenant submits final decision on a session."""
-    # Update session history
-    for entry in _session_history:
-        if entry["session_id"] == req.session_id:
-            entry["decision"] = req.decision
-            entry["notes"] = req.notes
-            entry["risk_score"] = req.risk_score
-            if req.tenant_id:
-                entry["tenant_id"] = req.tenant_id
-            break
-    else:
-        # Create history entry if doesn't exist
-        _session_history.append({
-            "session_id": req.session_id,
-            "user_id": req.user_id,
-            "tenant_id": req.tenant_id,
-            "timestamp": time.time(),
-            "status": "completed",
-            "decision": req.decision,
-            "notes": req.notes,
-            "risk_score": req.risk_score,
-        })
-
-    # Update application status
-    if req.user_id not in _app_status:
-        _app_status[req.user_id] = []
-    _app_status[req.user_id].append({
-        "session_id": req.session_id,
-        "status": req.decision,
-        "notes": req.notes,
-        "updated_at": time.time(),
-    })
-
-    # Notify user
-    labels = {
-        "approved": "Your KYC verification has been approved! ✅",
-        "rejected": "Your KYC verification was not successful. ❌",
-        "manual_review": "Your KYC is under manual review. 🔍",
-        "visit_branch": "Please visit the nearest branch for verification. 🏦",
-    }
-    _add_notification(req.user_id, labels.get(req.decision, "Your KYC status has been updated."), req.decision)
-
-    return {"message": "Decision submitted successfully.", "decision": req.decision}
+    return _process_session_decision(
+        session_id=req.session_id,
+        decision=req.decision,
+        notes=req.notes,
+        user_id=req.user_id,
+        tenant_id=req.tenant_id,
+        risk_score=req.risk_score
+    )
 
 # ─── Application Status ──────────────────────────────────────────────────────
 
@@ -466,8 +480,6 @@ async def upload_recording(session_id: str, file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-from app.core.session_manager import SessionManager
-
 # Initialize Session Manager
 session_manager = SessionManager()
 
@@ -496,7 +508,11 @@ async def session_websocket(websocket: WebSocket, session_id: str, role: str):
                     data = await websocket.receive_text()
                     message = json.loads(data)
                     
-                    if message.get("type") == "frame":
+                    if message.get("type") == "identify":
+                        session.user_id = message.get("user_id")
+                        # print(f"User identified: {session.user_id}")
+                    
+                    elif message.get("type") == "frame":
                         payload = message.get("data")
                         timestamp = message.get("timestamp", 0)
                         
@@ -552,9 +568,48 @@ async def session_websocket(websocket: WebSocket, session_id: str, role: str):
             await session.connect_tenant(websocket)
             try:
                 while True:
-                    # Tenant just listens mostly, or sends control commands
                     data = await websocket.receive_text()
-                    # Handle tenant commands if any (e.g. "request_high_res")
+                    msg = json.loads(data)
+                    
+                    if msg.get("type") == "end_session":
+                         decision_raw = msg.get("status", "ENDED") # APPROVED, REJECTED, ENDED
+                         decision = decision_raw.lower()
+                         
+                         # Process decision if it's a valid outcome
+                         if decision in ["approved", "rejected", "manual_review", "visit_branch"]:
+                             stats = session.orchestrator.get_current_stats()
+                             risk_score = stats.get("risk_pct", 0)
+                             
+                             _process_session_decision(
+                                 session_id=session_id,
+                                 decision=decision,
+                                 notes="Decision via Live Monitor",
+                                 user_id=session.user_id, 
+                                 tenant_id="tenant_ws", 
+                                 risk_score=risk_score
+                             )
+                         else:
+                             # Just ending without decision? Maybe imply manual review or just close.
+                             pass
+
+                         # Finalize session
+                         report = session.orchestrator.finalize_live_session()
+                         
+                         # Broadcast Report to tenant
+                         await session.broadcast_to_tenant({
+                            "type": "report",
+                            "data": asdict(report)
+                         })
+                         
+                         # Send Completion to Client with decision
+                         await session.send_to_client({
+                            "type": "completion",
+                            "status": "COMPLETED",
+                            "decision": decision if decision in ["approved", "rejected"] else report.classification.lower()
+                         })
+                         
+                         break
+
             except WebSocketDisconnect:
                 session.disconnect_tenant()
     
