@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
 numpy>=2.0.0
 opencv-python>=4.10.0.84

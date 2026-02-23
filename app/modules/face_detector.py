@@ -11,15 +11,21 @@ class FaceDetector:
     def __init__(self, min_detection_confidence=0.5):
         self.use_mediapipe = False
         try:
-            self.mp_face_detection = mp.solutions.face_detection
+            # Try different import paths for solutions
+            if hasattr(mp, 'solutions'):
+                self.mp_face_detection = mp.solutions.face_detection
+            else:
+                import mediapipe.python.solutions.face_detection as mp_face_detection
+                self.mp_face_detection = mp_face_detection
+            
             self.face_detection = self.mp_face_detection.FaceDetection(
                 model_selection=0, # 0 for short range
                 min_detection_confidence=min_detection_confidence
             )
             self.use_mediapipe = True
-            print("FaceDetector: Using MediaPipe")
-        except (AttributeError, ImportError, ModuleNotFoundError):
-            print("FaceDetector: MediaPipe legacy solutions not found. Falling back to OpenCV Haar Cascades.")
+            print("FaceDetector: Using MediaPipe face_detection")
+        except (AttributeError, ImportError, ModuleNotFoundError, Exception) as e:
+            print(f"FaceDetector: MediaPipe solutions not used ({e}). Falling back to OpenCV Haar Cascades.")
             # Load Haar Cascade
             cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
             self.face_cascade = cv2.CascadeClassifier(cascade_path)

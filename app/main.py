@@ -1,4 +1,5 @@
 import base64
+import asyncio
 import cv2
 import numpy as np
 import json
@@ -18,51 +19,49 @@ from dataclasses import asdict
 
 from app.core.orchestrator import SessionOrchestrator
 from app.core.session_manager import SessionManager
+from app.database import (
+    connect_db, close_db,
+    users_col, tokens_col, notifications_col,
+    tickets_col, session_history_col, app_status_col, doc_approvals_col
+)
+import app.database as database
 
-# ─── In-Memory User Store (replace with DB later) ────────────────────────────
-_users: dict = {}  # email -> {name, hashed_pw, role, org, id}
-_tokens: dict = {}  # token -> email
 
-# ─── In-Memory Feature Stores ────────────────────────────────────────────────
-_session_history: list = []       # [{session_id, user_id, tenant_id, timestamp, status, decision, notes, risk_score, ...}]
-_app_status: dict = {}            # user_id -> [{session_id, status, decision, notes, updated_at}]
-_support_tickets: list = []       # [{id, user_id, subject, description, status, created_at, updated_at}]
-_notifications: dict = {}         # user_id -> [{id, message, type, read, created_at}]
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _hash(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
 
-def _get_user_from_token(token: str):
-    email = _tokens.get(token)
-    if email:
-        return _users.get(email)
+async def _get_user_from_token(token: str):
+    doc = await database.tokens_col.find_one({"token": token})
+    if doc:
+        return await database.users_col.find_one({"email": doc["email"]})
     return None
 
-def _add_notification(user_id: str, message: str, ntype: str = "info"):
-    if user_id not in _notifications:
-        _notifications[user_id] = []
-    _notifications[user_id].insert(0, {
+async def _add_notification(user_id: str, message: str, ntype: str = "info"):
+    await database.notifications_col.insert_one({
         "id": secrets.token_hex(6),
+        "user_id": user_id,
         "message": message,
         "type": ntype,
         "read": False,
         "created_at": time.time(),
     })
 
-def _process_session_decision(session_id: str, decision: str, notes: str, user_id: str = None, tenant_id: str = None, risk_score: float = None):
-    # Update session history
-    for entry in _session_history:
-        if entry["session_id"] == session_id:
-            entry["decision"] = decision
-            entry["notes"] = notes
-            if risk_score is not None:
-                entry["risk_score"] = risk_score
-            if tenant_id:
-                entry["tenant_id"] = tenant_id
-            break
+async def _process_session_decision(
+    session_id: str, decision: str, notes: str,
+    user_id: str = None, tenant_id: str = None, risk_score: float = None
+):
+    existing = await database.session_history_col.find_one({"session_id": session_id})
+    if existing:
+        update = {"decision": decision, "notes": notes}
+        if risk_score is not None:
+            update["risk_score"] = risk_score
+        if tenant_id:
+            update["tenant_id"] = tenant_id
+        await database.session_history_col.update_one({"session_id": session_id}, {"$set": update})
     else:
-        # Create history entry if doesn't exist
-        _session_history.append({
+        await database.session_history_col.insert_one({
             "session_id": session_id,
             "user_id": user_id,
             "tenant_id": tenant_id,
@@ -73,34 +72,36 @@ def _process_session_decision(session_id: str, decision: str, notes: str, user_i
             "risk_score": risk_score,
         })
 
-    # Update application status
     if user_id:
-        if user_id not in _app_status:
-            _app_status[user_id] = []
-        _app_status[user_id].append({
+        await database.app_status_col.insert_one({
+            "user_id": user_id,
             "session_id": session_id,
             "status": decision,
             "notes": notes,
             "updated_at": time.time(),
         })
-
-        # Notify user (if not already notified manually via WS flow, but good to have)
         labels = {
             "approved": "Your KYC verification has been approved! ✅",
             "rejected": "Your KYC verification was not successful. ❌",
             "manual_review": "Your KYC is under manual review. 🔍",
             "visit_branch": "Please visit the nearest branch for verification. 🏦",
         }
-        _add_notification(user_id, labels.get(decision, "Your KYC status has been updated."), decision if decision in ["approved", "success"] else "info")
+        await _add_notification(
+            user_id,
+            labels.get(decision, "Your KYC status has been updated."),
+            decision if decision in ["approved", "success"] else "info"
+        )
 
     return {"message": "Decision processed", "decision": decision}
 
+
+# ─── Request Models ───────────────────────────────────────────────────────────
 
 class SignupRequest(BaseModel):
     name: str
     email: str
     password: str
-    role: str  # 'user' | 'tenant'
+    role: str
     organization: Optional[str] = None
 
 class LoginRequest(BaseModel):
@@ -111,34 +112,81 @@ class LoginRequest(BaseModel):
 class DecisionRequest(BaseModel):
     session_id: str
     user_id: str
-    decision: str  # 'approved' | 'rejected' | 'manual_review' | 'visit_branch'
+    decision: str
     notes: str
     risk_score: Optional[float] = None
-    tenant_id: Optional[str] = None  # Tenant making the decision
-
-
+    tenant_id: Optional[str] = None
 
 class TicketRequest(BaseModel):
     subject: str
     description: str
 
+
+# ─── App Setup ────────────────────────────────────────────────────────────────
+
 app = FastAPI(title="Shadow API", description="KYC Video Integrity Analysis")
 
-# Mount directories
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.middleware("http")
+async def log_requests(request, call_next):
+    print(f"[RECON] {request.method} {request.url.path}")
+    return await call_next(request)
+
+# ─── Session Management ───────────────────────────────────────────────────────
+
+session_manager = SessionManager()
+
+@app.post("/session/create")
+async def create_session():
+    code = session_manager.create_session()
+    return {"session_id": code}
+
+@app.on_event("startup")
+async def startup():
+    with open("startup_test.log", "w") as f:
+        f.write(f"Server started at {time.ctime()}\n")
+    await connect_db()
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "time": time.ctime(),
+        "mode": "in-memory",
+        "active_sessions": list(session_manager.active_sessions.keys())
+    }
+
+@app.get("/ping")
+async def ping():
+    return "pong"
+
+@app.on_event("shutdown")
+async def shutdown():
+    await close_db()
+
+# Mount static directories
 app.mount("/evidence", StaticFiles(directory="evidence"), name="evidence")
-# Serve the React build files
 app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
 
-# ─── Auth Endpoints ──────────────────────────────────────────────────────────
+
+# ─── Auth Endpoints ───────────────────────────────────────────────────────────
 
 @app.post("/auth/signup")
 async def signup(req: SignupRequest):
-    if req.email in _users:
+    existing = await database.users_col.find_one({"email": req.email})
+    if existing:
         raise HTTPException(status_code=400, detail="Email already registered.")
     if req.role not in ("user", "tenant"):
         raise HTTPException(status_code=400, detail="Invalid role.")
     user_id = secrets.token_hex(8)
-    _users[req.email] = {
+    await database.users_col.insert_one({
         "id": user_id,
         "name": req.name,
         "email": req.email,
@@ -146,22 +194,21 @@ async def signup(req: SignupRequest):
         "role": req.role,
         "organization": req.organization,
         "created_at": time.time(),
-    }
-    _add_notification(user_id, "Welcome to SHADOW KYC! Your account has been created.", "success")
+    })
+    await _add_notification(user_id, "Welcome to SHADOW KYC! Your account has been created.", "success")
     return {"message": "Account created successfully.", "user_id": user_id}
 
 @app.post("/auth/login")
 async def login(req: LoginRequest):
-    user = _users.get(req.email)
+    user = await database.users_col.find_one({"email": req.email})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     if user["hashed_pw"] != _hash(req.password):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     if user["role"] != req.role:
         raise HTTPException(status_code=403, detail=f"This account is registered as '{user['role']}', not '{req.role}'.")
-    # Generate simple token
     token = secrets.token_hex(32)
-    _tokens[token] = req.email
+    await database.tokens_col.insert_one({"token": token, "email": req.email, "created_at": time.time()})
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -175,7 +222,8 @@ async def login(req: LoginRequest):
         }
     }
 
-# ─── Session History Endpoints ────────────────────────────────────────────────
+
+# ─── Session History ──────────────────────────────────────────────────────────
 
 @app.post("/session/record-history")
 async def record_session_history(
@@ -183,7 +231,6 @@ async def record_session_history(
     user_id: str = Query(default=None),
     tenant_id: str = Query(default=None),
 ):
-    """Record a session for history tracking."""
     entry = {
         "session_id": session_id,
         "user_id": user_id,
@@ -194,23 +241,22 @@ async def record_session_history(
         "notes": "",
         "risk_score": None,
     }
-    _session_history.append(entry)
+    await database.session_history_col.insert_one(entry)
     return {"message": "Session recorded.", "entry": entry}
 
 @app.get("/session/history/{role_id}")
 async def get_session_history(role_id: str, role: str = Query(default="user")):
-    """Get session history for a user or tenant."""
     key = "user_id" if role == "user" else "tenant_id"
-    history = [s for s in _session_history if s.get(key) == role_id]
-    history.sort(key=lambda x: x["timestamp"], reverse=True)
+    cursor = database.session_history_col.find({key: role_id}).sort("timestamp", -1)
+    history = await cursor.to_list(length=200)
     return {"history": history}
 
-# ─── Tenant Decision Endpoint ────────────────────────────────────────────────
+
+# ─── Tenant Decision ──────────────────────────────────────────────────────────
 
 @app.post("/session/decision")
 async def submit_decision(req: DecisionRequest):
-    """Tenant submits final decision on a session."""
-    return _process_session_decision(
+    return await _process_session_decision(
         session_id=req.session_id,
         decision=req.decision,
         notes=req.notes,
@@ -219,20 +265,20 @@ async def submit_decision(req: DecisionRequest):
         risk_score=req.risk_score
     )
 
-# ─── Application Status ──────────────────────────────────────────────────────
+
+# ─── Application Status ───────────────────────────────────────────────────────
 
 @app.get("/application/status/{user_id}")
 async def get_application_status(user_id: str):
-    """Get application status for a user."""
-    statuses = _app_status.get(user_id, [])
-    statuses.sort(key=lambda x: x["updated_at"], reverse=True)
+    cursor = database.app_status_col.find({"user_id": user_id}).sort("updated_at", -1)
+    statuses = await cursor.to_list(length=100)
     return {"statuses": statuses}
+
 
 # ─── Support Tickets ──────────────────────────────────────────────────────────
 
 @app.post("/support/ticket")
 async def create_ticket(req: TicketRequest, user_id: str = Query(...)):
-    """Create a support ticket."""
     ticket = {
         "id": secrets.token_hex(6),
         "user_id": user_id,
@@ -242,64 +288,61 @@ async def create_ticket(req: TicketRequest, user_id: str = Query(...)):
         "created_at": time.time(),
         "updated_at": time.time(),
     }
-    _support_tickets.append(ticket)
-    _add_notification(user_id, f"Your support ticket '{req.subject}' has been created.", "info")
+    await database.tickets_col.insert_one(ticket)
+    await _add_notification(user_id, f"Your support ticket '{req.subject}' has been created.", "info")
     return {"message": "Ticket created.", "ticket": ticket}
 
 @app.get("/support/tickets/{user_id}")
 async def get_tickets(user_id: str):
-    """Get all tickets for a user."""
-    tickets = [t for t in _support_tickets if t["user_id"] == user_id]
-    tickets.sort(key=lambda x: x["created_at"], reverse=True)
+    cursor = database.tickets_col.find({"user_id": user_id}).sort("created_at", -1)
+    tickets = await cursor.to_list(length=100)
     return {"tickets": tickets}
 
 @app.get("/tenant/tickets")
 async def get_all_tickets():
-    """Get all support tickets (for tenant)."""
-    sorted_tickets = sorted(_support_tickets, key=lambda x: x["created_at"], reverse=True)
-    return {"tickets": sorted_tickets}
+    cursor = database.tickets_col.find({}).sort("created_at", -1)
+    tickets = await cursor.to_list(length=500)
+    return {"tickets": tickets}
+
 
 # ─── Notifications ────────────────────────────────────────────────────────────
 
 @app.get("/notifications/{user_id}")
 async def get_notifications(user_id: str):
-    """Get all notifications for a user."""
-    notifs = _notifications.get(user_id, [])
+    cursor = database.notifications_col.find({"user_id": user_id}).sort("created_at", -1)
+    notifs = await cursor.to_list(length=50)
     return {"notifications": notifs}
 
 @app.post("/notifications/{user_id}/read")
 async def mark_notifications_read(user_id: str):
-    """Mark all notifications as read."""
-    for n in _notifications.get(user_id, []):
-        n["read"] = True
+    await database.notifications_col.update_many({"user_id": user_id}, {"$set": {"read": True}})
     return {"message": "All notifications marked as read."}
 
-# ─── Tenant Stats ────────────────────────────────────────────────────────────
+
+# ─── Tenant Stats ─────────────────────────────────────────────────────────────
 
 @app.get("/tenant/stats/{tenant_id}")
 async def get_tenant_stats(tenant_id: str):
-    """Get aggregate stats for tenant reports."""
-    history = [s for s in _session_history if s.get("tenant_id") == tenant_id]
-    total = len(history)
+    cursor = database.session_history_col.find({"tenant_id": tenant_id})
+    history = await cursor.to_list(length=10000)
+    total    = len(history)
     approved = sum(1 for s in history if s["decision"] == "approved")
     rejected = sum(1 for s in history if s["decision"] == "rejected")
-    manual = sum(1 for s in history if s["decision"] == "manual_review")
-    visit = sum(1 for s in history if s["decision"] == "visit_branch")
-    pending = sum(1 for s in history if s["decision"] == "pending")
-    fraud = sum(1 for s in history if (s.get("risk_score") or 0) > 65)
+    manual   = sum(1 for s in history if s["decision"] == "manual_review")
+    visit    = sum(1 for s in history if s["decision"] == "visit_branch")
+    pending  = sum(1 for s in history if s["decision"] == "pending")
+    fraud    = sum(1 for s in history if (s.get("risk_score") or 0) > 65)
     return {
-        "total": total,
-        "approved": approved,
-        "rejected": rejected,
-        "manual_review": manual,
-        "visit_branch": visit,
-        "pending": pending,
+        "total": total, "approved": approved, "rejected": rejected,
+        "manual_review": manual, "visit_branch": visit, "pending": pending,
         "fraud_suspected": fraud,
     }
 
+
+# ─── Session Validate ─────────────────────────────────────────────────────────
+
 @app.get("/session/validate/{code}")
 async def validate_session(code: str):
-    """Check if a session code exists and is active."""
     session = session_manager.active_sessions.get(code)
     if session:
         return {
@@ -310,13 +353,10 @@ async def validate_session(code: str):
         }
     return {"valid": False}
 
-# ─── Document Upload & Approval ───────────────────────────────────────────────
-# In-memory store: session_id -> { approved: bool, docs: [filenames] }
-_doc_approvals: dict = {}
 
-ALLOWED_MIME_TYPES = {
-    "image/jpeg", "image/jpg", "image/png", "application/pdf"
-}
+# ─── Document Upload & Approval ───────────────────────────────────────────────
+
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/jpg", "image/png", "application/pdf"}
 MAX_DOC_SIZE_MB = 5
 REQUIRED_DOCS = {"gov_id", "selfie"}
 
@@ -327,14 +367,6 @@ async def upload_docs(
     selfie: UploadFile = File(...),
     address_proof: Optional[UploadFile] = File(None),
 ):
-    """
-    Validate and store KYC documents before allowing client into live session.
-    Required: gov_id + selfie. Optional: address_proof.
-    Returns { approved: true } on success.
-    """
-    # Note: we don't require the session to be active yet —
-    # the tenant may not have connected. We just validate the docs.
-
     docs = {"gov_id": gov_id, "selfie": selfie}
     if address_proof and address_proof.filename:
         docs["address_proof"] = address_proof
@@ -344,43 +376,28 @@ async def upload_docs(
 
     saved = []
     for doc_key, upload_file in docs.items():
-        # MIME type check
         content_type = upload_file.content_type or ""
         if content_type not in ALLOWED_MIME_TYPES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"'{doc_key}': Invalid file type '{content_type}'. Only JPG, PNG, PDF accepted."
-            )
+            raise HTTPException(status_code=400, detail=f"'{doc_key}': Invalid file type '{content_type}'. Only JPG, PNG, PDF accepted.")
 
-        # Size check
         contents = await upload_file.read()
         size_mb = len(contents) / (1024 * 1024)
         if size_mb > MAX_DOC_SIZE_MB:
-            raise HTTPException(
-                status_code=400,
-                detail=f"'{doc_key}': File too large ({size_mb:.1f} MB). Maximum is {MAX_DOC_SIZE_MB} MB."
-            )
-
-        # Must not be empty (at least 100 bytes)
+            raise HTTPException(status_code=400, detail=f"'{doc_key}': File too large ({size_mb:.1f} MB). Maximum is {MAX_DOC_SIZE_MB} MB.")
         if len(contents) < 100:
-            raise HTTPException(
-                status_code=400,
-                detail=f"'{doc_key}': File appears to be empty or corrupt."
-            )
+            raise HTTPException(status_code=400, detail=f"'{doc_key}': File appears to be empty or corrupt.")
 
-        # Save to disk
         ext = Path(upload_file.filename).suffix or ".bin"
         save_path = upload_dir / f"{doc_key}{ext}"
         with open(save_path, "wb") as f:
             f.write(contents)
         saved.append(str(save_path))
 
-    # Mark session as document-approved
-    _doc_approvals[session_id] = {
-        "approved": True,
-        "docs": saved,
-        "timestamp": time.time(),
-    }
+    await database.doc_approvals_col.update_one(
+        {"session_id": session_id},
+        {"$set": {"approved": True, "docs": saved, "timestamp": time.time()}},
+        upsert=True
+    )
 
     return {
         "approved": True,
@@ -389,15 +406,13 @@ async def upload_docs(
         "docs_received": list(docs.keys()),
     }
 
-
 # Mount temp_uploads for accessing uploaded documents
 app.mount("/uploads", StaticFiles(directory="temp_uploads"), name="uploads")
 
 
 @app.get("/session/doc-status/{session_id}")
 async def doc_status(session_id: str):
-    """Check if a session has approved documents."""
-    approval = _doc_approvals.get(session_id)
+    approval = await database.doc_approvals_col.find_one({"session_id": session_id})
     return {
         "approved": approval["approved"] if approval else False,
         "session_id": session_id,
@@ -405,278 +420,286 @@ async def doc_status(session_id: str):
 
 @app.get("/tenant/documents")
 async def get_tenant_documents():
-    """List all sessions with uploaded documents for review."""
-    # Convert _doc_approvals dict to a list of details
-    # _doc_approvals: session_id -> { approved, docs, timestamp }
+    cursor = database.doc_approvals_col.find({}).sort("timestamp", -1)
+    approvals = await cursor.to_list(length=500)
     results = []
-    for sid, data in _doc_approvals.items():
-        # Convert local paths to URLs
+    for data in approvals:
         doc_urls = []
         for path in data.get("docs", []):
-            # path is e.g. "temp_uploads\docs\SESSIONID\file.jpg"
-            # We want "/uploads/docs/SESSIONID/file.jpg"
             p = Path(path)
-            # relative_to("temp_uploads") might fail if path is absolute or different. 
-            # But the code saves as relative Path("temp_uploads") / ...
             try:
                 rel = p.relative_to("temp_uploads")
                 doc_urls.append(f"/uploads/{rel.as_posix()}")
             except ValueError:
-                doc_urls.append(str(path)) # Fallback
-        
+                doc_urls.append(str(path))
         results.append({
-            "session_id": sid,
+            "session_id": data["session_id"],
             "timestamp": data.get("timestamp"),
             "doc_urls": doc_urls
         })
-    
-    # Sort by recent first
-    results.sort(key=lambda x: x["timestamp"] or 0, reverse=True)
     return {"documents": results}
 
 
+# ─── Video Analysis ───────────────────────────────────────────────────────────
 
 @app.post("/analyze-session")
 async def analyze_session(file: UploadFile = File(...)):
-    """
-    Upload a video file for integrity analysis (Post-Upload mode).
-    """
     try:
         temp_dir = Path("temp_uploads")
         temp_dir.mkdir(exist_ok=True)
         file_path = temp_dir / f"upload_{file.filename}"
-        
+
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-            
+
         orchestrator = SessionOrchestrator()
         report = orchestrator.start_session(str(file_path))
-        
+
         try:
-             os.remove(file_path)
+            os.remove(file_path)
         except Exception as e:
-             print(f"Error removing temp file: {e}")
-             
+            print(f"Error removing temp file: {e}")
+
         return asdict(report)
-        
+
     except Exception as e:
         print(f"Error processing session: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/upload-recording")
 async def upload_recording(session_id: str, file: UploadFile = File(...)):
-    """
-    Save the recorded video from a live session.
-    """
     try:
         session_dir = Path("evidence") / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
         file_path = session_dir / "session_recording.webm"
-        
+
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-            
+
         return {"status": "success", "path": str(file_path)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Initialize Session Manager
+
+# ─── WebSocket Session ────────────────────────────────────────────────────────
+
 session_manager = SessionManager()
 
 @app.post("/session/create")
 async def create_session():
-    """Create a new session and return the 6-digit code."""
     code = session_manager.create_session()
     return {"session_id": code}
 
 @app.websocket("/ws/session/{session_id}/{role}")
 async def session_websocket(websocket: WebSocket, session_id: str, role: str):
-    """
-    Handle role-based WebSocket connections for a specific session.
-    Role: 'client' (User uploading video) or 'tenant' (Bank Officer viewing results).
-    """
+    await websocket.accept()
+    print(f"[WS] Accepted handshake: session={session_id}, role={role}", flush=True)
+    
     session = session_manager.active_sessions.get(session_id)
     if not session:
-        await websocket.close(code=4004, reason="Session not found")
+        print(f"[WS] 404: Session {session_id} not found for role={role}", flush=True)
+        await websocket.send_json({"type": "error", "message": "Session not found"})
+        await websocket.close(code=4004)
         return
+    
+    # Handshake accepted. Now enter the role-specific loop.
+    if role == "client":
+        await session.connect_client(websocket)
+        print(f"[WS] Handshake successful: {role} for session {session_id}", flush=True)
+        try:
+            while True:
+                data = await websocket.receive_text()
+                message = json.loads(data)
 
-    try:
-        if role == "client":
-            await session.connect_client(websocket)
-            try:
-                while True:
-                    data = await websocket.receive_text()
-                    message = json.loads(data)
-                    
-                    if message.get("type") == "identify":
-                        session.user_id = message.get("user_id")
-                        # print(f"User identified: {session.user_id}")
-                    
-                    elif message.get("type") == "frame":
-                        payload = message.get("data")
-                        timestamp = message.get("timestamp", 0)
-                        
-                        # Decode
-                        header, encoded = payload.split(",", 1)
+                if message.get("type") == "identify":
+                    user_id = message.get("user_id")
+                    session.user_id = user_id
+                    print(f"[WS] Client identified in session {session_id} as user {user_id}", flush=True)
+                    continue
+
+                if message.get("type") == "frame":
+                    payload = message.get("data", "")
+                    timestamp = message.get("timestamp", 0)
+
+                    try:
+                        _, encoded = payload.split(",", 1)
                         data_bytes = base64.b64decode(encoded)
                         nparr = np.frombuffer(data_bytes, np.uint8)
                         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                        
+
                         if frame is not None:
-                            # Process
                             frame_results = session.orchestrator.process_single_frame(frame, timestamp)
                             current_stats = session.orchestrator.get_current_stats()
-                            
-                            # Broadcast detailed results to Tenant
+
                             await session.broadcast_to_tenant({
                                 "type": "results",
                                 "frame": frame_results,
                                 "session": current_stats,
                                 "image": payload
                             })
-                            
-                            # Send minimal feedback to Client (e.g., quality warnings only)
-                            # Spec says: "Users only see final session result".
-                            # But we might want real-time quality feedback (blur, lighting).
+
                             quality_warning = None
-                            if frame_results["quality"] < 0.4:
+                            if frame_results.get("quality", 1) < 0.4:
                                 quality_warning = "Low Quality: Adjust Lighting"
-                            
+
                             await session.send_to_client({
                                 "type": "ack",
                                 "status": "processed",
-                                "quality_warning": quality_warning
+                                "quality_warning": quality_warning,
+                                "tenant_connected": session.tenant_socket is not None
                             })
+                    except Exception as frame_err:
+                        print(f"[WS] Frame processing error: {frame_err}")
 
-                    elif message.get("type") == "stop":
+                elif message.get("type") == "stop":
+                    try:
                         report = session.orchestrator.finalize_live_session()
-                        # Send full report to Tenant
-                        await session.broadcast_to_tenant({
-                            "type": "report",
-                            "data": asdict(report)
-                        })
-                        # Send summary to Client
+                        report_dict = asdict(report)
+                        
+                        # Persist for reconnection
+                        session.is_active = False
+                        session.final_report = report_dict
+                        
+                        raw_label = report.classification.lower()
+                        label_map = {
+                            "low_risk": "approved",
+                            "high_risk": "rejected",
+                            "medium_risk": "manual_review"
+                        }
+                        session.final_decision = label_map.get(raw_label, "completed")
+
+                        await session.broadcast_to_tenant({"type": "report", "data": report_dict})
                         await session.send_to_client({
-                            "type": "completion",
-                            "status": report.classification
+                            "type": "completion", 
+                            "status": "COMPLETED", 
+                            "decision": session.final_decision
                         })
-                        break
-            except WebSocketDisconnect:
-                session.disconnect_client()
-                
-        elif role == "tenant":
-            await session.connect_tenant(websocket)
-            try:
-                while True:
-                    data = await websocket.receive_text()
-                    msg = json.loads(data)
+                    except Exception as e:
+                        print(f"[WS] Stop error: {e}")
                     
-                    if msg.get("type") == "end_session":
-                         decision_raw = msg.get("status", "ENDED") # APPROVED, REJECTED, ENDED
-                         decision = decision_raw.lower()
-                         
-                         # Process decision if it's a valid outcome
-                         if decision in ["approved", "rejected", "manual_review", "visit_branch"]:
-                             stats = session.orchestrator.get_current_stats()
-                             risk_score = stats.get("risk_pct", 0)
-                             
-                             _process_session_decision(
-                                 session_id=session_id,
-                                 decision=decision,
-                                 notes="Decision via Live Monitor",
-                                 user_id=session.user_id, 
-                                 tenant_id="tenant_ws", 
-                                 risk_score=risk_score
-                             )
-                         else:
-                             # Just ending without decision? Maybe imply manual review or just close.
-                             pass
+                    # Wait 1s for completion to reach client
+                    await asyncio.sleep(1)
+                    break
 
-                         # Finalize session
-                         report = session.orchestrator.finalize_live_session()
-                         
-                         # Broadcast Report to tenant
-                         await session.broadcast_to_tenant({
-                            "type": "report",
-                            "data": asdict(report)
-                         })
-                         
-                         # Send Completion to Client with decision
-                         await session.send_to_client({
-                            "type": "completion",
-                            "status": "COMPLETED",
-                            "decision": decision if decision in ["approved", "rejected"] else report.classification.lower()
-                         })
-                         
-                         break
+        except WebSocketDisconnect:
+            print(f"[WS] Client disconnected from session {session_id}")
+            session.disconnect_client(websocket)
+            await session.notify_client_left()
+        except Exception as e:
+            print(f"[WS] Client error in session {session_id}: {e}")
+            session.disconnect_client(websocket)
+            await session.notify_client_left()
 
-            except WebSocketDisconnect:
-                session.disconnect_tenant()
-    
-    except Exception as e:
-        print(f"WebSocket error in session {session_id}: {e}")
-        await websocket.close()
+    elif role == "tenant":
+        await session.connect_tenant(websocket)
+        try:
+            while True:
+                data = await websocket.receive_text()
+                msg = json.loads(data)
 
-@app.websocket("/ws/live")
-async def websocket_existing(websocket: WebSocket):
-    """
-    Legacy endpoint for current Dashboard (Single View).
-    Creates a temporary session and acts as both Client and Tenant.
-    """
-    await websocket.accept()
-    
-    # Create an isolated session for this connection
-    session_code = session_manager.create_session()
-    session = session_manager.active_sessions[session_code]
-    
-    # Manually attach this socket as BOTH?
-    # Actually just reuse the logic but verify it works.
-    # We will simulate the loop here directly using the new session instance.
-    
-    try:
-        while True:
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            
-            if message.get("type") == "frame":
-                payload = message.get("data")
-                timestamp = message.get("timestamp", 0)
-                
-                header, encoded = payload.split(",", 1)
-                data_bytes = base64.b64decode(encoded)
-                nparr = np.frombuffer(data_bytes, np.uint8)
-                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                
-                if frame is not None:
-                    frame_results = session.orchestrator.process_single_frame(frame, timestamp)
-                    current_stats = session.orchestrator.get_current_stats()
+                if msg.get("type") == "end_session":
+                    decision_raw = msg.get("status", "ENDED")
+                    decision = decision_raw.lower()
+                    print(f"[WS] Tenant decision received: {decision} for session {session_id}", flush=True)
+
+                    if decision in ["approved", "rejected", "manual_review", "visit_branch"]:
+                        try:
+                            stats = session.orchestrator.get_current_stats()
+                            risk_score = stats.get("risk_pct", 0)
+                            await _process_session_decision(
+                                session_id=session_id,
+                                decision=decision,
+                                notes="Decision via Live Monitor",
+                                user_id=session.user_id,
+                                tenant_id="tenant_ws",
+                                risk_score=risk_score
+                            )
+                        except Exception as e:
+                            print(f"[WS] Decision processing error: {e}")
+
+                    # Finalize and notify (ALWAYS, even if status is just "ENDED")
+                    try:
+                        report = session.orchestrator.finalize_live_session()
+                        report_dict = asdict(report)
+                        
+                        # 1. LOCK the state FIRST for reconnection persistence
+                        session.is_active = False
+                        session.final_report = report_dict
+                        
+                        # Map internal labels to user-friendly decision strings
+                        raw_label = report.classification.lower()
+                        label_map = {
+                            "low_risk": "approved",
+                            "high_risk": "rejected",
+                            "medium_risk": "manual_review"
+                        }
+                        
+                        final_decision = decision if decision in ["approved", "rejected", "manual_review", "visit_branch"] else label_map.get(raw_label, "completed")
+                        session.final_decision = final_decision
+                        
+                        # 2. BROADCAST to everyone
+                        print(f"[WS] BROADCASTING FINAL DECISION: {final_decision} for {session_id}", flush=True)
+                        
+                        # PRIORITIZE telling the CLIENT (for reflection)
+                        try:
+                            print(f"[WS] Sending completion to client {session_id} NOW...", flush=True)
+                            await session.send_to_client({
+                                "type": "completion",
+                                "status": "COMPLETED",
+                                "decision": final_decision
+                            })
+                            print(f"[WS] Client completion sent successfully!", flush=True)
+                        except Exception as ce:
+                            print(f"[WS] ERROR sending to client: {ce}", flush=True)
+                        
+                        # THEN tell the Tenant
+                        await session.broadcast_to_tenant({"type": "report", "data": report_dict})
+                        
+                        # PERSIST the final state
+                        session_manager.save_state()
+                    except Exception as e:
+                        print(f"[WS] Finalize error: {e}")
                     
-                    await websocket.send_json({
-                        "type": "results",
-                        "frame": frame_results,
-                        "session": current_stats
-                    })
-            
-            elif message.get("type") == "stop":
-                report = session.orchestrator.finalize_live_session()
-                await websocket.send_json({
-                    "type": "report",
-                    "data": asdict(report)
-                })
-                break
-                
-    except WebSocketDisconnect:
-        session_manager.remove_session(session_code)
-    except Exception as e:
-        print(f"WS Error: {e}")
+                    # Wait a moment for buffers to flush before closing handler
+                    await asyncio.sleep(1)
+                    break
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+        except WebSocketDisconnect:
+            print(f"[WS] Tenant disconnected from session {session_id}")
+            session.disconnect_tenant(websocket)
+            await session.notify_tenant_left()
+        except Exception as e:
+            print(f"[WS] Tenant error in session {session_id}: {e}")
+            session.disconnect_tenant(websocket)
+            await session.notify_tenant_left()
 
-# SPA catch-all — must be LAST so it doesn't shadow API routes
+    else:
+        await websocket.close(code=4003, reason="Invalid role")
+
+
+# SPA catch-all — must be LAST
 @app.get("/{full_path:path}")
 async def catch_all(full_path: str):
-    if full_path.startswith("assets") or full_path.startswith("evidence"):
-        return FileResponse(f"frontend/dist/{full_path}")
+    # Only redirect to index.html if it's NOT a known API/WS path
+    # If the path starts with these, we want a real 404 if the route isn't found, not an index.html redirect
+    api_prefixes = ["auth", "tenant", "application", "support", "notifications", "uploads", "evidence", "analyze-session", "upload-recording"]
+    if any(full_path.startswith(prefix) for prefix in api_prefixes):
+        raise HTTPException(status_code=404)
+   
+    # Don't intercept /ws or /session - let them fail naturally or match
+    if full_path.startswith("ws") or full_path.startswith("session") or full_path.startswith("health") or full_path.startswith("ping"):
+        raise HTTPException(status_code=404)
+   
+    # Static assets
+    if full_path.startswith("assets"):
+        asset_path = Path("frontend/dist") / full_path
+        if asset_path.exists():
+            return FileResponse(str(asset_path))
+   
+    # Evidence files
+    if full_path.startswith("evidence"):
+        if Path(full_path).exists():
+            return FileResponse(full_path)
+
+    # Everything else goes to SPA index.html
     return FileResponse("frontend/dist/index.html")

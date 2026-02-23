@@ -34,7 +34,12 @@ class GeometryIntegrityChecker:
         self.use_mediapipe = False
         if _MP_AVAILABLE:
             try:
-                mp_fm = mp.solutions.face_mesh
+                if hasattr(mp, 'solutions'):
+                    mp_fm = mp.solutions.face_mesh
+                else:
+                    import mediapipe.python.solutions.face_mesh as face_mesh_sol
+                    mp_fm = face_mesh_sol
+                
                 self.face_mesh = mp_fm.FaceMesh(
                     static_image_mode=True,
                     max_num_faces=1,

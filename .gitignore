@@ -9,9 +9,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+venv_310/
 .venv/
 env/
 .env
+temp_uploads/
+uploads/
 
 # OS
 .DS_Store

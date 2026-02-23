@@ -23,6 +23,8 @@ const TenantMonitor = () => {
     const [sessionStats, setSessionStats] = useState({ avg_risk: 0, risk_pct: 0, classification: 'WAITING', flagged_count: 0, layer_averages: {} });
     const [evidence, setEvidence] = useState([]);
     const [sessionEnded, setSessionEnded] = useState(false);
+    const sessionEndedRef = useRef(sessionEnded);
+    useEffect(() => { sessionEndedRef.current = sessionEnded; }, [sessionEnded]);
 
     const user = JSON.parse(localStorage.getItem('shadow_user') || '{}');
     const role = localStorage.getItem('shadow_role') || 'tenant';
@@ -34,19 +36,27 @@ const TenantMonitor = () => {
         navigate('/login');
     };
 
-    useEffect(() => {
-        if (!sessionId) return;
+    const wsReconnectRef = useRef(null);
+    const wsReconnectDelay = useRef(1000);
 
+    const connectTenantWS = () => {
+        if (!sessionId) return;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const socket = new WebSocket(`${protocol}//${window.location.host}/ws/session/${sessionId}/tenant`);
+        const wsUrl = `${protocol}//${window.location.host}/ws/session/${sessionId}/tenant?v=${Date.now()}`;
+        console.log('[V8] Tenant connecting to:', wsUrl);
+        const socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
-            console.log('Tenant connected to session:', sessionId);
+            console.log('[V8] Tenant connected to session:', sessionId);
             setWsConnected(true);
+            wsReconnectDelay.current = 1000; // reset backoff
         };
 
         socket.onmessage = (event) => {
             const message = JSON.parse(event.data);
+            if (message.type !== 'results') {
+                console.log(`[V8] Tenant received (${message.type}):`, message);
+            }
 
             if (message.type === 'results') {
                 const { frame, session, image } = message;
@@ -57,11 +67,10 @@ const TenantMonitor = () => {
                 if (frame?.evidence_path) {
                     setEvidence(prev => [
                         { path: frame.evidence_path, risk: frame.risk, flag: frame.flags?.[0] || 'Anomaly', timestamp: frame.timestamp },
-                        ...prev.slice(0, 19), // Keep last 20
+                        ...prev.slice(0, 19),
                     ]);
                 }
 
-                // Draw remote frame on canvas
                 if (image && canvasRef.current) {
                     const ctx = canvasRef.current.getContext('2d');
                     const img = new Image();
@@ -80,13 +89,47 @@ const TenantMonitor = () => {
                 setClientConnected(false);
             } else if (message.type === 'report') {
                 setSessionEnded(true);
+            } else if (message.type === 'ack') {
+                // On connect, server tells us if client is already present
+                if (message.client_connected !== undefined) {
+                    setClientConnected(message.client_connected);
+                }
             }
         };
 
-        socket.onclose = () => setWsConnected(false);
-        wsRef.current = socket;
+        socket.onclose = (e) => {
+            console.log(`[V8] Tenant WS closed. Code: ${e.code}, Reason: ${e.reason}`);
+            setWsConnected(false);
+            wsRef.current = null;
 
-        return () => socket.close();
+            // Stop reconnecting if session is marked as ended
+            if (sessionEndedRef.current) {
+                console.log('[V8] Session ended by tenant. Stopping reconnect.');
+                return;
+            }
+
+            // Auto-reconnect with backoff (max 10s)
+            const delay = Math.min(wsReconnectDelay.current, 10000);
+            wsReconnectDelay.current = delay * 2;
+            console.log(`[V8] Reconnecting in ${delay}ms...`);
+            wsReconnectRef.current = setTimeout(connectTenantWS, delay);
+        };
+
+        socket.onerror = (e) => {
+            console.error('[V8] Tenant WS error:', e);
+            socket.close();
+        };
+
+        wsRef.current = socket;
+    };
+
+    useEffect(() => {
+        if (!sessionId) return;
+        connectTenantWS();
+        return () => {
+            if (wsReconnectRef.current) clearTimeout(wsReconnectRef.current);
+            if (wsRef.current) wsRef.current.close();
+        };
     }, [sessionId]);
 
     const copyCode = () => {
@@ -96,8 +139,13 @@ const TenantMonitor = () => {
     };
 
     const endSession = (status = 'ENDED') => {
+        console.log('[V8] Tenant ending session with status:', status);
         if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'end_session', status }));
+            const payload = { type: 'end_session', status };
+            console.log('[V8] Sending end_session payload:', payload);
+            wsRef.current.send(JSON.stringify(payload));
+        } else {
+            console.warn('[V8] Cannot send end_session: WebSocket readyState is', wsRef.current?.readyState);
         }
         setSessionEnded(true);
     };
@@ -150,9 +198,9 @@ const TenantMonitor = () => {
             minHeight: '100vh',
             display: 'flex', flexDirection: 'column',
             fontFamily: "'Plus Jakarta Sans', sans-serif",
-            backgroundColor: 'var(--bg-color)',
+            backgroundColor: '#0f172a', /* Fallback dark slate */
             color: 'var(--text-main)',
-            backgroundImage: 'url(/tenant_bg.png)',
+            backgroundImage: 'linear-gradient(to bottom, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.9)), url(/tenant_bg.png)',
             backgroundRepeat: 'no-repeat',
             backgroundPosition: 'center center',
             backgroundAttachment: 'fixed',
@@ -259,6 +307,16 @@ const TenantMonitor = () => {
                                 <canvas ref={canvasRef} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                             </div>
 
+                            {/* Version Badge in Corner of Video */}
+                            <div style={{
+                                position: 'absolute', bottom: '1rem', right: '1rem',
+                                padding: '0.4rem 0.8rem', background: 'rgba(255,255,255,0.1)',
+                                borderRadius: '0.4rem', color: 'white', fontSize: '0.6rem', fontWeight: 800,
+                                letterSpacing: '1px', zIndex: 100
+                            }}>
+                                SHADOW V8
+                            </div>
+
                             {/* HUD Overlay */}
                             {clientConnected && (
                                 <div style={{
@@ -329,18 +387,21 @@ const TenantMonitor = () => {
                                     position: 'absolute', inset: 0,
                                     display: 'flex', flexDirection: 'column',
                                     alignItems: 'center', justifyContent: 'center',
-                                    background: 'rgba(95, 84, 73, 0.95)', backdropFilter: 'blur(10px)',
+                                    background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(10px)',
                                     gap: '1.5rem',
                                 }}>
                                     <div style={{
-                                        width: '80px', height: '80px', background: 'white', borderRadius: '50%',
+                                        width: '80px', height: '80px',
+                                        background: riskScore > 50 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                                        borderRadius: '50%',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        boxShadow: '0 10px 25px rgba(0,0,0,0.1)'
+                                        boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                                        border: '1px solid rgba(255,255,255,0.1)'
                                     }}>
-                                        <CheckCircle size={40} color="#5F5449" />
+                                        <CheckCircle size={40} color="white" />
                                     </div>
                                     <div style={{ textAlign: 'center' }}>
-                                        <h3 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'white' }}>Session Ended</h3>
+                                        <h3 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'white' }}>Session Finalized</h3>
                                         <p style={{ color: 'white', fontWeight: 500, opacity: 0.9 }}>
                                             Final Risk Score: <strong style={{ color: 'white', fontSize: '1.1rem' }}>{riskScore}</strong>
                                         </p>

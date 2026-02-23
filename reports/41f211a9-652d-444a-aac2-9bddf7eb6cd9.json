@@ -1,0 +1,48 @@
+{
+    "session_id": "415360",
+    "risk_score": 0.2704,
+    "risk_pct": 27,
+    "classification": "LOW_RISK",
+    "recommendation": "APPROVE \u2013 Session appears authentic.",
+    "layer_scores": {
+        "l1_liveness": 0.4,
+        "l2_face_match": 0.983,
+        "l3_texture": 0.75,
+        "l4_geometry": 0.7,
+        "l5_lipsync": 0.7,
+        "l6_environment": 0.97
+    },
+    "reason_codes": [
+        "FROZEN_FRAME_REPLAY",
+        "L3_UNIFORM_SKIN_TEXTURE",
+        "L6_SUDDEN_LIGHTING_SHIFT"
+    ],
+    "top_suspicious_timestamps": [
+        1771841096.71,
+        1771841096.9,
+        1771841097.116,
+        1771841097.306,
+        1771841097.501,
+        1771841097.698,
+        1771841097.903,
+        1771841098.287,
+        1771841099.295,
+        1771841100.28
+    ],
+    "flagged_frame_count": 10,
+    "evidence_frames": [
+        "evidence/41f211a9-652d-444a-aac2-9bddf7eb6cd9/frame_1771841096710.jpg",
+        "evidence/41f211a9-652d-444a-aac2-9bddf7eb6cd9/frame_1771841096900.jpg",
+        "evidence/41f211a9-652d-444a-aac2-9bddf7eb6cd9/frame_1771841097116.jpg",
+        "evidence/41f211a9-652d-444a-aac2-9bddf7eb6cd9/frame_1771841097306.jpg",
+        "evidence/41f211a9-652d-444a-aac2-9bddf7eb6cd9/frame_1771841097501.jpg",
+        "evidence/41f211a9-652d-444a-aac2-9bddf7eb6cd9/frame_1771841097698.jpg",
+        "evidence/41f211a9-652d-444a-aac2-9bddf7eb6cd9/frame_1771841097903.jpg",
+        "evidence/41f211a9-652d-444a-aac2-9bddf7eb6cd9/frame_1771841098287.jpg",
+        "evidence/41f211a9-652d-444a-aac2-9bddf7eb6cd9/frame_1771841099295.jpg",
+        "evidence/41f211a9-652d-444a-aac2-9bddf7eb6cd9/frame_1771841100280.jpg"
+    ],
+    "deepfake_probability": null,
+    "replay_score": 0.4,
+    "liveness_score": 0.4
+}
