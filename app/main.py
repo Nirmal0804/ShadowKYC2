@@ -27,6 +27,7 @@ from app.database import (
 )
 import app.database as database
 from app.auth import verify_ws_token, get_user_from_auth_header
+import app.supabase_client as supa
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -41,14 +42,16 @@ async def _get_user_from_token(token: str):
     return None
 
 async def _add_notification(user_id: str, message: str, ntype: str = "info"):
-    await database.notifications_col.insert_one({
+    notif = {
         "id": secrets.token_hex(6),
         "user_id": user_id,
         "message": message,
         "type": ntype,
         "read": False,
         "created_at": time.time(),
-    })
+    }
+    await database.notifications_col.insert_one(notif)
+    asyncio.create_task(supa.upsert_notification(notif))
 
 async def _process_session_decision(
     session_id: str, decision: str, notes: str,
@@ -83,16 +86,28 @@ async def _process_session_decision(
             "updated_at": time.time(),
         })
         labels = {
-            "approved": "Your KYC verification has been approved! ✅",
-            "rejected": "Your KYC verification was not successful. ❌",
-            "manual_review": "Your KYC is under manual review. 🔍",
-            "visit_branch": "Please visit the nearest branch for verification. 🏦",
+            "approved": "Your KYC verification has been approved!",
+            "rejected": "Your KYC verification was not successful.",
+            "manual_review": "Your KYC is under manual review.",
+            "visit_branch": "Please visit the nearest branch for verification.",
         }
+        notif_msg = labels.get(decision, "Your KYC status has been updated.")
         await _add_notification(
             user_id,
-            labels.get(decision, "Your KYC status has been updated."),
+            notif_msg,
             decision if decision in ["approved", "success"] else "info"
         )
+        # Sync to Supabase
+        asyncio.create_task(supa.upsert_app_status(
+            user_id=user_id, session_id=session_id,
+            status=decision, notes=notes
+        ))
+
+    # Update session in Supabase
+    asyncio.create_task(supa.upsert_session(
+        session_id=session_id, user_id=user_id, tenant_id=tenant_id,
+        status="completed", decision=decision, notes=notes, risk_score=risk_score
+    ))
 
     return {"message": "Decision processed", "decision": decision}
 
@@ -204,7 +219,7 @@ async def create_session(authorization: str = Header(None)):
     if session:
         session.tenant_id = tenant_id
 
-    # Record in local history immediately
+    # Record in local history + Supabase
     await database.session_history_col.insert_one({
         "session_id": code,
         "user_id": None,
@@ -215,6 +230,10 @@ async def create_session(authorization: str = Header(None)):
         "notes": "",
         "risk_score": None,
     })
+    asyncio.create_task(supa.upsert_session(
+        session_id=code, tenant_id=tenant_id,
+        status="active", decision="pending"
+    ))
 
     return {"session_id": code}
 
@@ -223,6 +242,15 @@ async def startup():
     with open("startup_test.log", "w") as f:
         f.write(f"Server started at {time.ctime()}\n")
     await connect_db()
+    # Bulk-sync local db.json data to Supabase on every startup
+    asyncio.create_task(supa.sync_all_local_data(
+        users=database._users,
+        history=database._history_list,
+        notifs=database._notif_list,
+        tickets=database._ticket_list,
+        doc_approvals=database._doc_approvals,
+        app_status=database._app_status_list,
+    ))
 
 @app.get("/health")
 async def health():
@@ -367,6 +395,7 @@ async def create_ticket(req: TicketRequest, user_id: str = Query(...)):
         "updated_at": time.time(),
     }
     await database.tickets_col.insert_one(ticket)
+    asyncio.create_task(supa.upsert_ticket(ticket))
     await _add_notification(user_id, f"Your support ticket '{req.subject}' has been created.", "info")
     return {"message": "Ticket created.", "ticket": ticket}
 
@@ -476,6 +505,9 @@ async def upload_docs(
         {"$set": {"approved": True, "docs": saved, "timestamp": time.time()}},
         upsert=True
     )
+    asyncio.create_task(supa.upsert_doc_approval(
+        session_id=session_id, approved=True, docs=saved
+    ))
 
     return {
         "approved": True,
@@ -646,6 +678,12 @@ async def session_websocket(websocket: WebSocket, session_id: str, role: str, to
                         }
                         session.final_decision = label_map.get(raw_label, "completed")
 
+                        asyncio.create_task(supa.upsert_session(
+                            session_id=session_id, user_id=session.user_id, tenant_id=session.tenant_id,
+                            status="completed", decision=session.final_decision, 
+                            risk_score=report.risk_pct
+                        ))
+
                         await session.broadcast_to_tenant({"type": "report", "data": report_dict})
                         await session.send_to_client({
                             "type": "completion", 
@@ -715,6 +753,13 @@ async def session_websocket(websocket: WebSocket, session_id: str, role: str, to
                         final_decision = decision if decision in ["approved", "rejected", "manual_review", "visit_branch"] else label_map.get(raw_label, "completed")
                         session.final_decision = final_decision
                         
+                        # Sync final state to Supabase
+                        asyncio.create_task(supa.upsert_session(
+                            session_id=session_id, user_id=session.user_id, tenant_id=session.tenant_id,
+                            status="completed", decision=final_decision, 
+                            risk_score=report.risk_pct
+                        ))
+
                         # 2. BROADCAST to everyone
                         print(f"[WS] BROADCASTING FINAL DECISION: {final_decision} for {session_id}", flush=True)
                         
