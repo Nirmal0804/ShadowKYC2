@@ -81,20 +81,27 @@ alter table app_status       enable row level security;
 
 -- Service role bypasses RLS automatically — no extra policy needed.
 -- Add user-facing read policies if needed:
-create policy if not exists "Service role full access on session_history"
+
+drop policy if exists "Service role full access on session_history" on session_history;
+create policy "Service role full access on session_history"
     on session_history for all using (true) with check (true);
 
-create policy if not exists "Service role full access on shadow_users"
+drop policy if exists "Service role full access on shadow_users" on shadow_users;
+create policy "Service role full access on shadow_users"
     on shadow_users for all using (true) with check (true);
 
-create policy if not exists "Service role full access on notifications"
+drop policy if exists "Service role full access on notifications" on notifications;
+create policy "Service role full access on notifications"
     on notifications for all using (true) with check (true);
 
-create policy if not exists "Service role full access on doc_approvals"
+drop policy if exists "Service role full access on doc_approvals" on doc_approvals;
+create policy "Service role full access on doc_approvals"
     on doc_approvals for all using (true) with check (true);
 
-create policy if not exists "Service role full access on tickets"
+drop policy if exists "Service role full access on tickets" on tickets;
+create policy "Service role full access on tickets"
     on tickets for all using (true) with check (true);
 
-create policy if not exists "Service role full access on app_status"
+drop policy if exists "Service role full access on app_status" on app_status;
+create policy "Service role full access on app_status"
     on app_status for all using (true) with check (true);
