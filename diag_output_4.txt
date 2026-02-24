@@ -1,0 +1,13 @@
+2026-02-18 12:31:55.543247: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-02-18 12:31:58.634109: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+--- DIAGNOSING SHADOW PIPELINE V2 ---
+Mediapipe version: 0.10.32
+Mediapipe dir: ['Image', 'ImageFormat', '__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__', '__package__', '__path__', '__spec__', '__version__', 'tasks']
+FAILED: Explicitly import mediapipe.solutions.face_detection failed: No module named 'mediapipe.solutions'
+SUCCESS: SessionOrchestrator imported.
+Initializing Orchestrator...
+FaceDetector: MediaPipe legacy solutions not found. Falling back to OpenCV Haar Cascades.
+LivenessEngine: MediaPipe FaceMesh solutions not found. Liveness checking will be limited.
+Deepfake model not found at E:\impactaithon1\app\models\deepfake_model.tflite. Layer 5 will be skipped.
+SUCCESS: Orchestrator initialized.
+--- DIAGNOSIS COMPLETE ---

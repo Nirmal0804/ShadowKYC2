@@ -1,0 +1,19 @@
+2026-02-18 12:31:03.379917: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-02-18 12:31:06.261411: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+Traceback (most recent call last):
+  File "E:\impactaithon1\diagnose_pipeline_v2.py", line 29, in <module>
+    orchestrator = SessionOrchestrator()
+  File "E:\impactaithon1\app\core\orchestrator.py", line 27, in __init__
+    self.face_detector = FaceDetector()
+                         ~~~~~~~~~~~~^^
+  File "E:\impactaithon1\app\modules\face_detector.py", line 11, in __init__
+    self.mp_face_detection = mp.solutions.face_detection
+                             ^^^^^^^^^^^^
+AttributeError: module 'mediapipe' has no attribute 'solutions'
+--- DIAGNOSING SHADOW PIPELINE V2 ---
+Mediapipe version: 0.10.32
+Mediapipe dir: ['Image', 'ImageFormat', '__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__', '__package__', '__path__', '__spec__', '__version__', 'tasks']
+FAILED: Explicitly import mediapipe.solutions.face_detection failed: No module named 'mediapipe.solutions'
+SUCCESS: SessionOrchestrator imported.
+Initializing Orchestrator...
+FAILED: Orchestrator initialization failed: module 'mediapipe' has no attribute 'solutions'

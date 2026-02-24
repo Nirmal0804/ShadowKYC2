@@ -1,0 +1,13 @@
+@echo off
+if exist venv_310\ (
+    echo Activating Python 3.10 Virtual Environment...
+    call venv_310\Scripts\activate
+) else (
+    echo [WARN] venv_310 not found. Using system Python...
+)
+
+echo Installing dependencies...
+python -m pip install -r requirements.txt
+echo starting Shadow API Server...
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+pause

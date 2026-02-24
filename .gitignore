@@ -1,0 +1,22 @@
+# Node.js
+node_modules/
+dist/
+build/
+.npm/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+venv_310/
+.venv/
+env/
+.env
+frontend/.env
+temp_uploads/
+uploads/
+
+# OS
+.DS_Store
+Thumbs.db

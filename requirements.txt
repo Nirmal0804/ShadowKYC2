@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+python-multipart
+numpy>=2.0.0
+opencv-python>=4.10.0.84
+mediapipe>=0.10.14
+scipy
+tensorflow
+pillow
+python-jose[cryptography]
+httpx
+python-dotenv
+websockets
+wsproto
+pyzbar

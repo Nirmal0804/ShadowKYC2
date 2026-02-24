@@ -1,0 +1,59 @@
+{
+    "session_id": "79d533ed-6e8a-48df-ad73-bbf4a2625817",
+    "risk_score": 0.2257,
+    "risk_pct": 22,
+    "classification": "LOW_RISK",
+    "recommendation": "APPROVE \u2013 Session appears authentic.",
+    "layer_scores": {
+        "l1_liveness": 0.7,
+        "l2_face_match": 0.8342,
+        "l3_texture": 0.7166,
+        "l4_geometry": 0.7,
+        "l5_lipsync": 0.7,
+        "l6_environment": 1.0
+    },
+    "reason_codes": [
+        "L2_SUDDEN_APPEARANCE_CHANGE",
+        "L3_OVER_SMOOTH_FACE",
+        "L3_UNIFORM_SKIN_TEXTURE"
+    ],
+    "top_suspicious_timestamps": [
+        0.0,
+        0.3278282208588957,
+        0.6556564417177914,
+        0.9834846625766871,
+        1.3113128834355827,
+        1.6391411042944783,
+        1.9669693251533742,
+        2.2947975460122696,
+        2.6226257668711654,
+        2.9504539877300613
+    ],
+    "flagged_frame_count": 21,
+    "evidence_frames": [
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_0.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_327.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_655.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_983.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_1311.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_1639.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_1966.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_2294.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_2622.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_2950.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_3278.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_3606.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_3933.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_4261.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_4589.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_4917.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_5245.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_5573.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_5900.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_6228.jpg",
+        "evidence/79d533ed-6e8a-48df-ad73-bbf4a2625817/frame_6556.jpg"
+    ],
+    "deepfake_probability": null,
+    "replay_score": 0.7,
+    "liveness_score": 0.7
+}

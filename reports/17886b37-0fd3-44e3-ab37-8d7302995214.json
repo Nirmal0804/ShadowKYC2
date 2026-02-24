@@ -1,0 +1,43 @@
+{
+    "session_id": "780896",
+    "risk_score": 0.2807,
+    "risk_pct": 28,
+    "classification": "LOW_RISK",
+    "recommendation": "APPROVE \u2013 Session appears authentic.",
+    "layer_scores": {
+        "l1_liveness": 0.5286,
+        "l2_face_match": 0.9734,
+        "l3_texture": 0.4498,
+        "l4_geometry": 0.7,
+        "l5_lipsync": 0.7,
+        "l6_environment": 1.0
+    },
+    "reason_codes": [
+        "FROZEN_FRAME_REPLAY",
+        "L3_GAN_GRID_ARTIFACT",
+        "L3_OVER_SMOOTH_FACE",
+        "L3_UNIFORM_SKIN_TEXTURE"
+    ],
+    "top_suspicious_timestamps": [
+        1771865093.856,
+        1771865094.042,
+        1771865094.24,
+        1771865094.451,
+        1771865094.658,
+        1771865095.277,
+        1771865096.284
+    ],
+    "flagged_frame_count": 7,
+    "evidence_frames": [
+        "evidence/17886b37-0fd3-44e3-ab37-8d7302995214/frame_1771865093856.jpg",
+        "evidence/17886b37-0fd3-44e3-ab37-8d7302995214/frame_1771865094042.jpg",
+        "evidence/17886b37-0fd3-44e3-ab37-8d7302995214/frame_1771865094240.jpg",
+        "evidence/17886b37-0fd3-44e3-ab37-8d7302995214/frame_1771865094451.jpg",
+        "evidence/17886b37-0fd3-44e3-ab37-8d7302995214/frame_1771865094658.jpg",
+        "evidence/17886b37-0fd3-44e3-ab37-8d7302995214/frame_1771865095277.jpg",
+        "evidence/17886b37-0fd3-44e3-ab37-8d7302995214/frame_1771865096284.jpg"
+    ],
+    "deepfake_probability": null,
+    "replay_score": 0.5286,
+    "liveness_score": 0.5286
+}

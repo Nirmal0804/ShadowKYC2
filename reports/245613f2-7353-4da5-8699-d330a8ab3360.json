@@ -1,0 +1,49 @@
+{
+    "session_id": "245613f2-7353-4da5-8699-d330a8ab3360",
+    "risk_score": 0.2156,
+    "risk_pct": 21,
+    "classification": "LOW_RISK",
+    "recommendation": "APPROVE \u2013 Session appears authentic.",
+    "layer_scores": {
+        "l1_liveness": 0.7,
+        "l2_face_match": 0.8751,
+        "l3_texture": 0.75,
+        "l4_geometry": 0.7,
+        "l5_lipsync": 0.7,
+        "l6_environment": 0.9792
+    },
+    "reason_codes": [
+        "L3_UNIFORM_SKIN_TEXTURE",
+        "L6_BACKGROUND_MOTION_DETECTED"
+    ],
+    "top_suspicious_timestamps": [
+        0.0,
+        0.3340906432748538,
+        0.6681812865497077,
+        1.0022719298245615,
+        1.3363625730994153,
+        1.670453216374269,
+        2.004543859649123,
+        2.3386345029239766,
+        2.6727251461988306,
+        3.006815789473684
+    ],
+    "flagged_frame_count": 12,
+    "evidence_frames": [
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_0.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_334.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_668.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_1002.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_1336.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_1670.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_2004.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_2338.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_2672.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_3006.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_3340.jpg",
+        "evidence/245613f2-7353-4da5-8699-d330a8ab3360/frame_3674.jpg"
+    ],
+    "deepfake_probability": null,
+    "replay_score": 0.7,
+    "liveness_score": 0.7
+}

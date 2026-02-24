@@ -1,0 +1,24 @@
+D:\$RECYCLE.BIN\S-1-5-21-1411707105-2777290118-1643673885-1002\$RHVI2FG\qr_doc_verifier\venv\Lib\site-packages\pip\_internal\network\auth.py: 16507
+D:\$RECYCLE.BIN\S-1-5-21-1411707105-2777290118-1643673885-1002\$RHVI2FG\qr_doc_verifier\venv\Lib\site-packages\pip\_vendor\requests\auth.py: 10187
+D:\Drone App\.venv\Lib\site-packages\pip\_internal\network\auth.py: 20806
+D:\Drone App\.venv\Lib\site-packages\pip\_vendor\requests\auth.py: 10186
+D:\Drone App\.venv\Lib\site-packages\werkzeug\datastructures\auth.py: 10055
+D:\DroneCrowdSystem\backend\venv\Lib\site-packages\pip\_internal\network\auth.py: 20809
+D:\DroneCrowdSystem\backend\venv\Lib\site-packages\pip\_vendor\requests\auth.py: 10186
+D:\DroneCrowdSystem\backend\venv\Lib\site-packages\requests\auth.py: 10186
+D:\DroneCrowdSystem\backend\venv\Lib\site-packages\werkzeug\datastructures\auth.py: 10055
+D:\edge_downloads\shadowkyc-firstroundeva\ShadowKYC2-main\app\auth.py: 0
+D:\impactaithon1\venv_310\Lib\site-packages\pip\_internal\network\auth.py: 16507
+D:\impactaithon1\venv_310\Lib\site-packages\pip\_vendor\requests\auth.py: 10187
+D:\impactaithon1\venv_310\Lib\site-packages\pymongo\auth.py: 886
+D:\impactaithon1\venv_310\Lib\site-packages\pymongo\asynchronous\auth.py: 17246
+D:\impactaithon1\venv_310\Lib\site-packages\pymongo\synchronous\auth.py: 16991
+D:\impactaithon1\venv_310\Lib\site-packages\requests\auth.py: 10186
+D:\impactaithon1\venv_310\Lib\site-packages\tensorboard\auth.py: 3768
+D:\impactaithon1\venv_310\Lib\site-packages\websockets\auth.py: 586
+D:\impactaithon1\venv_310\Lib\site-packages\websockets\legacy\auth.py: 6721
+D:\impactaithon1\venv_310\Lib\site-packages\werkzeug\datastructures\auth.py: 10055
+D:\shadow_kyc (1)\.venv\Lib\site-packages\pip\_internal\network\auth.py: 20806
+D:\shadow_kyc (1)\.venv\Lib\site-packages\pip\_vendor\requests\auth.py: 10186
+D:\shadow_kyc (1)\shadow_kyc\venv\Lib\site-packages\pip\_internal\network\auth.py: 11961
+D:\shadow_kyc (1)\shadow_kyc\venv\Lib\site-packages\pip\_vendor\requests\auth.py: 10512
