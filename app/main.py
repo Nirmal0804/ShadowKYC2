@@ -579,14 +579,16 @@ async def analyze_session(file: UploadFile = File(...)):
 @app.post("/upload-recording")
 async def upload_recording(session_id: str, file: UploadFile = File(...)):
     try:
-        session_dir = Path("evidence") / session_id
-        session_dir.mkdir(parents=True, exist_ok=True)
-        file_path = session_dir / "session_recording.webm"
+        # [SECURITY] Disk storage disabled as per user request
+        # session_dir = Path("evidence") / session_id
+        # session_dir.mkdir(parents=True, exist_ok=True)
+        # file_path = session_dir / "session_recording.webm"
 
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # with open(file_path, "wb") as buffer:
+        #     shutil.copyfileobj(file.file, buffer)
 
-        return {"status": "success", "path": str(file_path)}
+        print(f"[SECURITY] Session recording received but NOT stored: {session_id}")
+        return {"status": "success", "message": "Recording processed in-memory (not stored on disk)"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
